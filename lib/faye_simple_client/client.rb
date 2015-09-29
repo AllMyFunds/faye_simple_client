@@ -24,6 +24,7 @@ module FayeSimpleClient
     def http
       @http ||= Faraday.new(url: endpoint) do |c|
         c.request :json
+        c.request :basic_authentication, "x", secret
         c.response :json, content_type: /\bjson$/
         c.adapter Faraday.default_adapter
       end
@@ -43,6 +44,12 @@ module FayeSimpleClient
         raise CustomError.new(errors.compact.uniq.join(', '))
       end
       response
+    end
+
+    def subscriber_count(channel)
+      response = http.get("/api/subscriber_count/#{channel.gsub(/^\//, "")}")
+      Rails.logger.info "subscriber_count: #{response.body.inspect}"
+      response.body.to_i
     end
 
   end
