@@ -48,7 +48,6 @@ module FayeSimpleClient
 
     def subscriber_count(channel)
       response = http.get("/api/subscriber_count/#{channel.gsub(/^\//, "")}")
-      Rails.logger.info "subscriber_count: #{response.body.inspect}"
       response.body.to_i
     end
 
