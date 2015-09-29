@@ -24,7 +24,7 @@ module FayeSimpleClient
     def http
       @http ||= Faraday.new(url: endpoint) do |c|
         c.request :json
-        c.request :basic_authentication, "x", secret
+        c.request :basic_auth, "x", secret
         c.response :json, content_type: /\bjson$/
         c.adapter Faraday.default_adapter
       end
