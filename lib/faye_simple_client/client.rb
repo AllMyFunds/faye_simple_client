@@ -39,6 +39,7 @@ module FayeSimpleClient
         data:    data,
         ext:    { password: secret }
       })
+      raise CustomError.new("Response body should not be empty") if response.body == ""
       errors = response.body.inject([]) do |result, e|
         result << e['error'] unless e['successful']
         result
