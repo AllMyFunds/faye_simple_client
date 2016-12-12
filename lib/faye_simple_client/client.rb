@@ -1,3 +1,5 @@
+require "faraday"
+
 module FayeSimpleClient
   class CustomError < StandardError; end
   class Client
