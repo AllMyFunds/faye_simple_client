@@ -15,6 +15,10 @@ module FayeSimpleClient
       def push(channel, data)
         client.push(channel, data)
       end
+
+      def subscriber_count(channel)
+        client.subscriber_count(channel)
+      end
     end
 
     attr_reader :endpoint, :secret
