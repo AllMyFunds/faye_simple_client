@@ -5,6 +5,8 @@ module FayeSimpleClient
   class CustomError < StandardError; end
   class Client
 
+    MAX_ATTEMPTS = 10
+
     class << self
       attr_accessor :endpoint, :secret
 
@@ -38,20 +40,31 @@ module FayeSimpleClient
     end
 
     def push(channel, data)
-      response = http.post(nil, {
-        channel: channel,
-        data:    data,
-        ext:    { password: secret }
-      })
-      raise CustomError.new("Response body should not be empty") if response.body == ""
-      errors = response.body.inject([]) do |result, e|
-        result << e['error'] unless e['successful']
-        result
+      attempts = 0
+      begin
+        response = http.post(nil, {
+          channel: channel,
+          data:    data,
+          ext:    { password: secret }
+        })
+        raise CustomError.new("Response body should not be empty") if response.body == ""
+        errors = response.body.inject([]) do |result, e|
+          result << e['error'] unless e['successful']
+          result
+        end
+        if errors.present?
+          raise CustomError.new(errors.compact.uniq.join(', '))
+        end
+        response
+      rescue CustomError => error
+        attempts += 1
+        if attempts < MAX_ATTEMPTS
+          sleep 0.1 * (attempts - 1) * 5
+          retry
+        else
+          raise error
+        end
       end
-      if errors.present?
-        raise CustomError.new(errors.compact.uniq.join(', '))
-      end
-      response
     end
 
     def subscriber_count(channel)
