@@ -3,9 +3,19 @@ require "faraday_middleware"
 
 module FayeSimpleClient
   class CustomError < StandardError; end
+  class EmptyBody < StandardError; end
+
+  class EmptyBodyMiddleware < Faraday::Response::Middleware
+    def on_complete(env)
+      if env[:status] == 200 && env[:body].to_s == ""
+        raise EmptyBody.new("Body empty")
+      end
+    end
+  end
+
   class Client
 
-    MAX_ATTEMPTS = 10
+    MAX_ATTEMPTS = 20
 
     class << self
       attr_accessor :endpoint, :secret
@@ -34,6 +44,11 @@ module FayeSimpleClient
       @http ||= Faraday.new(url: endpoint) do |c|
         c.request :json
         c.request :basic_auth, "x", secret
+        c.request :retry, max: MAX_ATTEMPTS,
+                          interval: 0.05,
+                          interval_randomness: 0.5,
+                          backoff_factor: 2,
+                          exceptions: [ Faraday::Error::ConnectionFailed, EmptyBody ]
         c.response :json, content_type: /\bjson$/
         c.adapter Faraday.default_adapter
       end
@@ -47,7 +62,6 @@ module FayeSimpleClient
           data:    data,
           ext:    { password: secret }
         })
-        raise CustomError.new("Response body should not be empty") if response.body == ""
         errors = response.body.inject([]) do |result, e|
           result << e['error'] unless e['successful']
           result
@@ -56,14 +70,6 @@ module FayeSimpleClient
           raise CustomError.new(errors.compact.uniq.join(', '))
         end
         response
-      rescue CustomError => error
-        attempts += 1
-        if attempts < MAX_ATTEMPTS
-          sleep 0.1 * (attempts - 1) * 5
-          retry
-        else
-          raise error
-        end
       end
     end
 
