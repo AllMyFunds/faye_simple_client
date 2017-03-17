@@ -1,9 +1,16 @@
 require "faraday"
+require "faraday_connection_pool"
 require "faraday_middleware"
 
 module FayeSimpleClient
   class CustomError < StandardError; end
   class ServerError < Faraday::Error::ClientError; end
+
+  FaradayConnectionPool.configure do |config|
+    config.size = 10
+    config.pool_timeout = 5
+    config.keep_alive_timeout = 30
+  end
 
   class RaiseServerError < Faraday::Middleware
     ServerErrorStatuses = 500...600
@@ -63,7 +70,7 @@ module FayeSimpleClient
                           methods: [:post, :delete, :get, :head, :options, :put],
                           exceptions: [ Faraday::Error::ConnectionFailed, ServerError ]
         c.request :raise_server_error
-        c.adapter Faraday.default_adapter
+        c.adapter :net_http_pooled
       end
     end
 
