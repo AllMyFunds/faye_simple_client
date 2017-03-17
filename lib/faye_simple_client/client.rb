@@ -3,19 +3,30 @@ require "faraday_middleware"
 
 module FayeSimpleClient
   class CustomError < StandardError; end
-  class EmptyBody < StandardError; end
+  class ServerError < Faraday::Error::ClientError; end
 
-  class EmptyBodyMiddleware < Faraday::Response::Middleware
-    def on_complete(env)
-      if env[:status] == 200 && env[:body].to_s == ""
-        raise EmptyBody.new("Body empty")
+  class RaiseServerError < Faraday::Middleware
+    ServerErrorStatuses = 500...600
+
+    def call(env)
+      response = @app.call(env)
+      case env[:status]
+      when ServerErrorStatuses
+        raise ServerError, response_values(env)
       end
+      response
     end
+
+    def response_values(env)
+      {:status => env.status, :headers => env.response_headers, :body => env.body}
+    end
+
+    Faraday::Request.register_middleware raise_server_error: -> { self }
   end
 
   class Client
 
-    MAX_ATTEMPTS = 20
+    MAX_ATTEMPTS = 30
 
     class << self
       attr_accessor :endpoint, :secret
@@ -42,35 +53,34 @@ module FayeSimpleClient
 
     def http
       @http ||= Faraday.new(url: endpoint) do |c|
+        c.response :json, content_type: /\bjson$/
         c.request :json
         c.request :basic_auth, "x", secret
         c.request :retry, max: MAX_ATTEMPTS,
                           interval: 0.05,
                           interval_randomness: 0.5,
                           backoff_factor: 2,
-                          exceptions: [ Faraday::Error::ConnectionFailed, EmptyBody ]
-        c.response :json, content_type: /\bjson$/
+                          methods: [:post, :delete, :get, :head, :options, :put],
+                          exceptions: [ Faraday::Error::ConnectionFailed, ServerError ]
+        c.request :raise_server_error
         c.adapter Faraday.default_adapter
       end
     end
 
     def push(channel, data)
-      attempts = 0
-      begin
-        response = http.post(nil, {
-          channel: channel,
-          data:    data,
-          ext:    { password: secret }
-        })
-        errors = response.body.inject([]) do |result, e|
-          result << e['error'] unless e['successful']
-          result
-        end
-        if errors.present?
-          raise CustomError.new(errors.compact.uniq.join(', '))
-        end
-        response
+      response = http.post(nil, {
+        channel: channel,
+        data:    data,
+        ext:    { password: secret }
+      })
+      errors = response.body.inject([]) do |result, e|
+        result << e['error'] unless e['successful']
+        result
       end
+      if errors.present?
+        raise CustomError.new(errors.compact.uniq.join(', '))
+      end
+      response
     end
 
     def subscriber_count(channel)
