@@ -84,7 +84,7 @@ module FayeSimpleClient
         result << e['error'] unless e['successful']
         result
       end
-      if errors.present?
+      if errors && errors.is_a?(Array) && errors.size > 0
         raise CustomError.new(errors.compact.uniq.join(', '))
       end
       response
