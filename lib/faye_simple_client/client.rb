@@ -14,14 +14,11 @@ module FayeSimpleClient
 
   class RaiseServerError < Faraday::Middleware
     ServerErrorStatuses = 500...600
-    MissingStatus = 404
 
     def call(env)
       response = @app.call(env)
       case env[:status]
       when ServerErrorStatuses
-        raise ServerError, response_values(env)
-      when MissingStatus
         raise ServerError, response_values(env)
       end
       response
